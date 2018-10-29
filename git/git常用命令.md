@@ -7,5 +7,4 @@
 
 
 # git还原
-1.还原至某个版本<br>
-git reset ”commitId“
+* 还原至某个版本 `git reset ”commitId“`
