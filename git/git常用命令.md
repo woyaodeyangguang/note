@@ -10,9 +10,9 @@
 * 还原至某个版本 `git reset ”commitId“`
 
 # git提交
-  git push <远程主机名> <本地分支名> : <远程分支名>
-  以下是一些示例
-  `git push origin master`
+  git push <远程主机名> <本地分支名> : <远程分支名>  
+  以下是一些示例  
+  `git push origin master`  
   上面的命令表示，将本地master分支推送到orgin 主机的master分支。如果master不存在，则会被新创建
   
 * git 提交当前分支，推到code review `git push origin HEAD:/refs/for/master`
