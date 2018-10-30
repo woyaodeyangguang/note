@@ -10,4 +10,4 @@
 * 还原至某个版本 `git reset ”commitId“`
 
 # git提交
-* git push origin HEAD:/refs/for/master
+* git 提交当前分支，推到code review `git push origin HEAD:/refs/for/master`
