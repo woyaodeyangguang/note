@@ -8,3 +8,6 @@
 
 # git还原
 * 还原至某个版本 `git reset ”commitId“`
+
+# git提交
+* git push origin HEAD:/refs/for/master
