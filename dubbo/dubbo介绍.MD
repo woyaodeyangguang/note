@@ -1,7 +1,7 @@
 # dubbo 介绍
 ## dubbo 是什么？
    本质：一个jar包+分布式框架+远程调用分布式框架  
-   ![图片]（http://dubbo.apache.org/img/architecture.png）
+   ![图片](http://dubbo.apache.org/img/architecture.png)
    
    传统的MVC系统，所有的实现都在一个服务器上，调用方法自然而然调用。现在需求增多拆分成多个，部署在不同的服务器上，分布式后，web层调用service层变成了远程服务调用。
    怎样像都在一个服务器上调用方法？dubbo 来解决。
