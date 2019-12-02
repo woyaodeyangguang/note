@@ -1,277 +1,103 @@
-# Consul介绍
+# 概述
 
-**Consul**是HashiCorp公司推出的开源工具，用于实现分布式系统的**服务发现**与**配置**；一种分布式、高可用、支持水平扩展的服务注册与发现的注册中心，[官方文档](https://www.consul.io/intro/index.html)中说明它包括了如下的功能：
+服务注册中心（简称注册中心）是微服务架构中重要的一个组件，在微服务架构中起到了协调者的作用，因各公司的架构、规模、部署环境等不尽相同，所以注册中心在业界中有不同的实践。
 
-- **服务发现、注册**：Consul通过DNS、HTTP接口支持服务注册和服务发现。
-- **健康检查**：健康检查使consul可以快速告警在集群的操作。和服务发现集成，可以防止服务调用至发生故障的服务上；
-- **KV存储**：一个用来存储动态配置的系统。
-- **多数据中心**（Multi Data Center）：支持多数据中心来避免单点故障。zookeeper和etcd均不支持多数据中心功能；
-- **一致性算法：**采用Raft一致性协议算法。使用Gossip协议管理成员和广播消息；
-- **服务管理Dashboard：**提供一个Web UI的服务注册于健康状态监控的管理页面；
+相关的术语如下：
 
-# Consul 架构
+| 名词                               | 解释                                                         |
+| ---------------------------------- | ------------------------------------------------------------ |
+| 注册中心(Registry)                 | 服务注册中心，本文主要解释的微服务组件。                     |
+| 注册中心客户端（Registry Client）  | 不管是服务提供者还是服务调用者，都算是注册中心的客户端，本文里简称客户端。 |
+| 注册中心管理端（Registry Console） | 注册中心数据的管理端，本文里简称管理端 。                    |
+| 服务(Service)                      | 一般是指一个接口，可以包括多个方法。例如订单服务包含有查询订单、新增订单等方法 |
+| 服务提供者(Provider)               | 暴露一个监听端口，提供一到多个服务。                         |
+| 服务调用者(Consumer)               | 连接服务提供者的端口，发起远程调用。                         |
 
-下图为Consul[官方文档](https://www.consul.io/docs/internals/architecture.html)提供的架构设计图：
+# 注册中心功能
 
-![](https://www.consul.io/assets/images/consul-arch-420ce04a.png)
+很多人将注册中心和配置中心混为一谈，一般认为因为服务注册的数据其实就是配置的一种，其实这样介绍不无道理，的确注册中心的数据是配置的一种。但是注册中心之所以独立的存在，因为注册中心的数据有一定的业务独立性，一般都是为了描述微服务相关的。
 
-上图中包含了两个Consul数据中心，每个数据中心都是一个Consul集群，在数据中心1中可以看到Consul的集群是由N个SERVER，加上M个CLIENT组成的。而不管是SERVER还是CLIENT都是集群中的节点。所有的服务都注册在这些节点上，正是通过这些节点实现服务注册信息的共享。
+## 注册中心需求
 
-**CLIENT**
+注册中心一般需要包含如下功能： 服务发现、服务配置、服务健康检查；
 
-CLIENT表示Consul的CLIENT模式，及客户端模式。是Consul节点的一种模式，在这种模式下，所有注册到该节点的服务都会被转发到SERVER节点，其本身**不持久化**这些信息；
+**服务发现**
 
-**SERVER**
+- 服务注册/反注册：保存服务提供者和服务调用者的信息。
+- 服务订阅/取消订阅：服务调用者订阅服务提供者的信息，最好有实时推送的功能。
+- 服务路由（可选）：具有筛选整合服务提供者的能力。
 
-SERVER表示Consul的SERVER模式，表明这个是SERVER节点。这种模式下，功能和CLIENT都一样，唯一不同的是，它会把所有的信息**持久化**的本地。这样遇到故障，信息是可以被保留的。
+**服务配置（不包括其它无关配置）**
 
- **SERVER-LEADER**
+- 配置订阅：服务提供者和服务调用者订阅微服务相关的配置
+- 配置下发（可选）：主动将配置推送给服务提供者和服务调用者
 
-中间那个SERVER下面有LEADER的描述，表明这个SERVER节点是它们的老大。和其它SERVER不一样的一点是，它需要负责**同步注册信息**给其它的SERVER，同时也要负责**各个节点**的**健康监测**。
+**服务健康检测**
 
-# Consul通讯接口
+- 检测服务提供者的健康情况
 
-## RPC
+## 一致性分歧
 
-主要用于内部通讯Gossip、日志分发、选主；
+分布式里一个重要的理论，那就是 CAP。在注册中心的发展上面，一直有两个分支：一个就是 CP 系统，追求数据的强一致性。还有一个是 AP 系统，追求高可用与最终一致。
 
-## HTTP API
+## 为什么不用DNS
 
-服务发现、健康检查、KV存储等几乎所有功能；
+DNS 只是到 IP 级别，无法处理端口等信息。DNS 携带的数据较少，例如节点权重、序列化方式等等，无法传递。另外 DNS 没有节点状态管理功能，如果由外部系统刷新，那么将无法剔除死的节点。
 
-## Consul Command(CLI)
+# 功能对比
 
-Consul命令行工具可以与Consul agent进行连接。
+| Feature              | euerka                       | Consul                 | zookeeper             | etcd              |
+| :------------------- | :--------------------------- | :--------------------- | :-------------------- | :---------------- |
+| 服务健康检查         | 可配支持                     | 服务状态，内存，硬盘等 | (弱)长连接，keepalive | 连接心跳          |
+| 多数据中心           | —                            | 支持                   | —                     | —                 |
+| kv 存储服务          | —                            | 支持                   | 支持                  | 支持              |
+| 负载均衡策略         | Ribbon                       | Fabio                  | —                     |                   |
+| 一致性               | —                            | raft                   | paxos                 | raft              |
+| cap                  | ap                           | cp                     | cp                    | cp                |
+| 使用接口(多语言能力) | http（sidecar）              | 支持 http 和 dns       | 客户端                | http/grpc         |
+| watch 支持           | 支持 long polling/大部分增量 | 全量/支持long polling  | 支持                  | 支持 long polling |
+| 自身监控             | metrics                      | metrics                | —                     | metrics           |
+| 安全                 | —                            | acl /https             | acl                   | https 支持（弱）  |
+| spring cloud 集成    | 已支持                       | 已支持                 | 已支持                | 已支持            |
 
-实际上Consul CLI 默认调用HTTP API与Consul集群通讯，具体请参考：[官网](https://www.consul.io/docs/commands/index.html#consul_http_addr)
+# 健康检查
 
-## DNS
+Zookeeper、Eureka都实现了一种TTL机制（Time To Live），如果客户端在一定的时间内没有向注册中心发送心跳后，则会将这个客户端摘除；
 
-常用于服务查询；
+Consul也支持TTL方式，但是提供了更加全面的健康检查方式；
 
-# Blocking Queries
+健康检查的方式分为**客户端健康检查**和**服务端健康检查**，客户端健康检查和服务端健康检查有一些不同的关注点；
 
-在Consul中很多endpoint提供了一个特性，称为"Blocking Queries"。Blocking Queries使用long polling（长轮训）方式等待直至服务端发生变化；[官网](https://www.consul.io/api/features/blocking.html)说明如下：
+## 客户端健康检查
 
-> Many endpoints in Consul support a feature known as "blocking queries". A blocking query is used to wait for a potential change using long polling. 
->
-> Endpoints that support blocking queries return an HTTP header named `X-Consul-Index`. This is a unique identifier representing the current state of the requested resource.
->
-> On subsequent requests for this resource, the client can set the `index` query string parameter to the value of `X-Consul-Index`, indicating that the client wishes to wait for any changes subsequent to that index.
+客户端健康检查主要关注**客户端上报心跳的方式**、**服务端摘除不健康客户端的机制**；
 
-提供Blocking Queries特性的endpoint会在返回的HTTP header信息中携带X-Consul-Index，其是请求资源的状态唯一标识。举个例子：
 
-**第一次请求**
 
-- 可以看到返回信息中携带的X-Consul-Index为74：
+## 服务端健康检查
 
-```shell
-$ curl -v http://localhost:8500/v1/health/service/hello-service
-*   Trying ::1...
-* TCP_NODELAY set
-* Connection failed
-* connect to ::1 port 8500 failed: Connection refused
-*   Trying 127.0.0.1...
-* TCP_NODELAY set
-* Connected to localhost (127.0.0.1) port 8500 (#0)
-> GET /v1/health/service/hello-service HTTP/1.1
-> Host: localhost:8500
-> User-Agent: curl/7.54.0
-> Accept: */*
->
-< HTTP/1.1 200 OK
-< Content-Type: application/json
-< Vary: Accept-Encoding
-< X-Consul-Effective-Consistency: leader
-< X-Consul-Index: 74
-< X-Consul-Knownleader: true
-< X-Consul-Lastcontact: 0
-< Date: Wed, 06 Nov 2019 13:34:53 GMT
-< Content-Length: 3
-<
-[]
-```
+服务端健康检查则关注探测客户端的方式、灵敏度以及设置客户端健康状态的机制；
 
-**后续请求**
 
-- index 作为Query Parameter其值为上述X-Consul-Index的值；
-- wait表示long polling时的超时时间；
 
-```shell
-$ curl -v http://localhost:8500/v1/health/service/hello-service?index=74&wait=1m
-```
-
-## 数据同步
+## 两种方式对比
 
-通常数据不会在不同的DC之间进行复制。当一个请求请求另外一个DC上的数据时,Local Consul Server会把通过RPC请求转发至远端的Consul Server，当远端Consul Server不可用时，这些请求的资源将会不可用，但是并不会影响Local DC。当一个特殊情况时，有限的数据子集可以被复制，比如Consul 内置ACL Replication，或者另外的工具比如[consul-replicate](https://github.com/hashicorp/consul-replicate/)；
+| 方式       | 实现                                                         | 实例剔除                                                     |
+| :--------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
+| 客户端探测 | 从实现复杂性上来讲，服务端探测肯定会更加复杂，因为服务端根据注册服务配置的健康检查方式，去执行响应的接口，判断响应的返回结果，并做好重试机制和线程池管理。 | 服务端健康检查**无法摘除**不健康实例，这意味只要注册过的服务实例，只要不调用接口主动注销，这些服务实例都需要去维护健康检查的探测任务； |
+| 服务端探测 | 客户端探测从实现上只需要等待心跳，然后刷新TTL；              | 可以摘除不健康实例，减轻服务端的压力。                       |
 
 
 
-
+# 负载均衡
 
-# Consul ACL
+负载均衡严格的来讲，并不算传统注册中心的功能。一般来讲服务发现的完整流程应该是先从注册中心获取服务的实例列表，然后根据自身的需求，来选择其中的部分实例或按照一定的流量分配机制来访问不同的服务提供者，因此注册中心本身不限定服务消费者的访问策略；
 
+Eureka、Zookeeper和Consul本身没有去实现可配置及可扩展的负载均衡策略机制，**Eureka**的负载均衡是由**Ribbon**来完成，**Consul**则是利用**Fabio**做负载均衡；
 
 
-# Consul单节点安装
 
-安装[下载地址](https://www.consul.io/downloads.html)下载对应操作系统的安装文件，Consul使用Go语言进行开发和实现，因此安装时只需要运行下载包中的二进制文件即可。
+# 参考
 
-```shell
-$ consul agent -dev -ui
-```
-
-- -dev表示开发服务器模式启动，不会进行数据持久化；
-- -ui表示打开ui界面，即通过http://localhost:8500可以查看UI界面（默认能访问）；
-
-启动信息如下：
-
-```shell
-$ consul agent -dev -ui
-
-==> Starting Consul agent...
-==> Consul agent running!
-           Version: 'v1.4.4'
-           Node ID: '0922070e-b5d0-42ef-2795-9bb08631ceb1'
-         Node name: '000000133287y'
-        Datacenter: 'dc1' (Segment: '<all>')
-            Server: true (Bootstrap: false)
-       Client Addr: [127.0.0.1] (HTTP: 8500, HTTPS: -1, gRPC: 8502, DNS: 8600)
-      Cluster Addr: 127.0.0.1 (LAN: 8301, WAN: 8302)
-           Encrypt: Gossip: false, TLS-Outgoing: false, TLS-Incoming: false
-==> Log data will now stream in as it occurs:
-    2019/11/05 10:49:12 [DEBUG] agent: Using random ID "0922070e-b5d0-42ef-2795-9bb08631ceb1" as node ID
-    2019/11/05 10:49:12 [DEBUG] tlsutil: Update with version 1
-    2019/11/05 10:49:12 [DEBUG] tlsutil: OutgoingRPCWrapper with version 1
-    2019/11/05 10:49:12 [DEBUG] tlsutil: IncomingRPCConfig with version 1
-    2019/11/05 10:49:12 [DEBUG] tlsutil: OutgoingRPCWrapper with version 1
-    2019/11/05 10:49:12 [INFO] raft: Initial configuration (index=1): [{Suffrage:Voter ID:0922070e-b5d0-42ef-2795-9bb08631ceb1 Address:127.0.0.1:8300}]
-    2019/11/05 10:49:12 [INFO] raft: Node at 127.0.0.1:8300 [Follower] entering Follower state (Leader: "")
-    2019/11/05 10:49:12 [INFO] serf: EventMemberJoin: 000000133287y.dc1 127.0.0.1
-    2019/11/05 10:49:12 [INFO] serf: EventMemberJoin: 000000133287y 127.0.0.1
-    2019/11/05 10:49:12 [INFO] consul: Adding LAN server 000000133287y (Addr: tcp/127.0.0.1:8300) (DC: dc1)
-    2019/11/05 10:49:12 [INFO] consul: Handled member-join event for server "000000133287y.dc1" in area "wan"
-```
-
-几点说明：
-
-- 节点名称：这是代理agent的唯一名称。默认情况为主机名，可通过-node指定；
-- 数据中心：这是代理agent运行的数据中心；每个节点都必须设置其数据中心，-datacenter标志可设置数据中心，对于单DC配置，默认为"dc1"；
-- 服务器：表示其是以CLIENT还是SERVER模式启动；
-- 客户端地址：这是用于代理的客户端接口地址，包括HTTP和DNS接口，默认情况下绑定在localhost；
-- 集群地址：用于集群Consul agent之间通信的地址和端口集；
-- -dev：该模式不能用于生产环境，该模式下不会持久化任何状态，该模式仅仅是为了快速便捷启动单节点Consul;
-
-# Docker集群安装
-
-## 集群节点规划
-
-模拟在mac环境单机或者其他虚拟机中使用docker进行集群安装：
-
-| 容器名称 | 容器IP地址 | 映射端口      | 服务运行模式  |
-| -------- | ---------- | ------------- | ------------- |
-| node1    | 172.17.0.2 | 8500 -> 8500  | Server Master |
-| node2    | 172.17.0.3 | 9500 -> 8500  | Server        |
-| node3    | 172.17.0.4 | 10500 -> 8500 | Server        |
-| node4    | 172.17.0.5 | 11500 -> 8500 | Client        |
-
-## 配置参数说明
-
-| 参数列表         | 参数的含义和使用场景说明                                     |
-| ---------------- | ------------------------------------------------------------ |
-| advertise        | 通知展现地址用来改变我们给集群中的其他节点展现的地址，一般情况下-bind地址就是展现地址 |
-| bootstrap        | 用来控制一个server是否在bootstrap模式，在一个datacenter中只能有一个server处于bootstrap模式，当一个server处于bootstrap模式时，可以自己选举为raft leader |
-| bootstrap-expect | 在一个datacenter中期望提供的server节点数目，当该值提供的时候，consul一直等到达到指定sever数目的时候才会引导整个集群，该标记不能和bootstrap共用 |
-| bind             | 该地址用来在集群内部的通讯IP地址，集群内的所有节点到地址都必须是可达的，默认是0.0.0.0 |
-| client           | consul绑定在哪个client地址上，这个地址提供HTTP、DNS、RPC等服务，默认是127.0.0.1 |
-| config-file      | 明确的指定要加载哪个配置文件                                 |
-| config-dir       | 配置文件目录，里面所有以.json结尾的文件都会被加载            |
-| data-dir         | 提供一个目录用来存放agent的状态，所有的agent允许都需要该目录，该目录必须是稳定的，系统重启后都继续存在 |
-| dc               | 该标记控制agent允许的datacenter的名称，默认是dc1             |
-| encrypt          | 指定secret key，使consul在通讯时进行加密，key可以通过consul keygen生成，同一个集群中的节点必须使用相同的key |
-| join             | 加入一个已经启动的agent的ip地址，可以多次指定多个agent的地址。如果consul不能加入任何指定的地址中，则agent会启动失败，默认agent启动时不会加入任何节点 |
-| retry-interval   | 两次join之间的时间间隔，默认是30s                            |
-| retry-max        | 尝试重复join的次数，默认是0，也就是无限次尝试                |
-| log-level        | consul agent启动后显示的日志信息级别。默认是info，可选：trace、debug、info、warn、err |
-| node             | 节点在集群中的名称，在一个集群中必须是唯一的，默认是该节点的主机名 |
-| protocol         | consul使用的协议版本                                         |
-| rejoin           | 使consul忽略先前的离开，在再次启动后仍旧尝试加入集群中       |
-| server           | 定义agent运行在server模式，每个集群至少有一个server，建议每个集群的server不要超过5个 |
-| syslog           | 开启系统日志功能，只在linux/osx上生效                        |
-| pid-file         | 提供一个路径来存放pid文件，可以使用该文件进行SIGINT/SIGHUP(关闭/更新)agent |
-
-## Consul安装步骤
-
-### 拉取Consul镜像
-
-```shell
-$ docker pull consul:latest
-```
-
-### 启动Server节点
-
-**node1**
-
-```shell
-$ docker run -d --name=node1 --restart=always \
-             -e 'CONSUL_LOCAL_CONFIG={"skip_leave_on_interrupt": true}' \
-             -p 8300:8300 \
-             -p 8301:8301 \
-             -p 8301:8301/udp \
-             -p 8302:8302/udp \
-             -p 8302:8302 \
-             -p 8400:8400 \
-             -p 8500:8500 \
-             -p 8600:8600 \
-             -h node1 \
-             consul agent -server -bind=172.17.0.2 -bootstrap-expect=3 -node=node1 \
-             -data-dir=/tmp/data-dir -client 0.0.0.0 -ui
-```
-
-**node2**
-
-```shell
-$ docker run -d --name=node2 --restart=always \
-             -e 'CONSUL_LOCAL_CONFIG={"skip_leave_on_interrupt": true}' \
-             -p 9300:8300  \
-             -p 9301:8301 \
-             -p 9301:8301/udp \
-             -p 9302:8302/udp \
-             -p 9302:8302 \
-             -p 9400:8400 \
-             -p 9500:8500 \
-             -p 9600:8600 \
-             -h node2 \
-             consul agent -server -bind=172.17.0.3 \
-             -join=172.22.204.53 -node-id=$(uuidgen | awk '{print tolower($0)}') \
-             -node=node2 \
-             -data-dir=/tmp/data-dir -client 0.0.0.0 -ui
-```
-
-**node3**
-
-```shell
-$ docker run -d --name=node3 --restart=always \
-             -e 'CONSUL_LOCAL_CONFIG={"skip_leave_on_interrupt": true}' \
-             -p 10300:8300  \
-             -p 10301:8301 \
-             -p 10301:8301/udp \
-             -p 10302:8302/udp \
-             -p 10302:8302 \
-             -p 10400:8400 \
-             -p 10500:8500 \
-             -p 10600:8600 \
-             -h node2 \
-             consul agent -server -bind=172.17.0.4 \
-             -join=172.22.204.53 -node-id=$(uuidgen | awk '{print tolower($0)}') \
-             -node=node3 \
-             -data-dir=/tmp/data-dir -client 0.0.0.0 -ui
-```
-
-
-
-
-
-# Consul运维
-
-## Consul的数据备份
+1. [主流微服务注册中心浅析和对比]
+2. [服务注册中心架构演进](https://www.jianshu.com/p/5014bb302c7d)
