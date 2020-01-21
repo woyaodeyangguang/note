@@ -103,6 +103,12 @@ TCP长连接：相比TCP短连接，每次通信完毕后，不会关闭连接�
 
 Linux操作系统中设置KeepAlive相关参数，修改`/etc/sysctl.conf`文件：
 
+```shell
+net.ipv4.tcp_keepalive_time=90
+net.ipv4.tcp_keepalive_intvl=15
+net.ipv4.tcp_keepalive_probes=2
+```
+
 **TCP keep alive和HTTP keep alive区别**
 
 这压根是两个概念：
@@ -116,10 +122,6 @@ Linux操作系统中设置KeepAlive相关参数，修改`/etc/sysctl.conf`文件
 
 1. [通俗大白话来理解TCP协议的三次握手和四次挥手](https://github.com/jawil/blog/issues/14)
 2. [长连接和短链接](https://juejin.im/post/5b010591518825673564cb50)
-
-
-
-
 
 
 
