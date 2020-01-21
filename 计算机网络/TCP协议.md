@@ -65,7 +65,6 @@ TCP作为一种可靠传输控制协议，其**核心思想**是：既要保证�
 - CLOSED: 表示连接中断。
 
 
-
 # TCP长/短连接
 
 参考：[聊聊TCP长连接和心跳那些事](https://www.cnkirito.moe/tcp-talk/)
